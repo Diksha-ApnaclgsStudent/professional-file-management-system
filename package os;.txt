@@ -1,0 +1,181 @@
+package os;
+
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.util.*;
+
+public class Simulator extends JFrame {
+    class MyFile {
+        String name, content="", folder="root";
+        int size; String attr="Normal"; boolean isOpen=false;
+        MyFile(String n, int s, String f){name=n; size=s; folder=f;}
+    }
+    HashMap<String, MyFile> files = new HashMap<>();
+    HashMap<String, MyFile> recycle = new HashMap<>();
+    HashSet<String> folders = new HashSet<>(Arrays.asList("root","Documents","Images","Music"));
+    int TOTAL=2048, used=0;
+
+    CardLayout cards = new CardLayout();
+    JPanel main = new JPanel(cards);
+    DefaultTableModel model, recycleModel;
+    JLabel lblUsed, lblFiles; JProgressBar bar;
+    JComboBox<String> cbFolder;
+
+    public Simulator() {
+        setTitle("Professional File Management System - OS Project");
+        setSize(1000, 650);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        main.add(createLogin(), "login");
+        main.add(createDashboard(), "dashboard");
+        main.add(createFileManager(), "fileman");
+        main.add(createFolderMan(), "folderman");
+        main.add(createOperations(), "ops");
+        main.add(createDetails(), "details");
+        main.add(createSearch(), "search");
+        main.add(createRecycle(), "recycle");
+        main.add(createSettings(), "settings");
+        add(main);
+        cards.show(main, "login");
+    }
+
+    Color DARK = new Color(33, 37, 41);
+    Color TEAL = new Color(0, 150, 136);
+    Color CARD = new Color(248, 249, 250);
+
+    JPanel createLogin(){
+        JPanel p = new JPanel(new GridBagLayout()); p.setBackground(DARK);
+        JPanel box = new JPanel(new GridLayout(4,1,10,10)); box.setBackground(Color.WHITE);
+        box.setBorder(BorderFactory.createEmptyBorder(30,30,30,30));
+        JLabel l = new JLabel("OS FILE MANAGER LOGIN", SwingConstants.CENTER);
+        l.setFont(new Font("Segoe UI",Font.BOLD,18));
+        JTextField user = new JTextField("admin"); JPasswordField pass = new JPasswordField("admin");
+        JButton btn = new JButton("LOGIN"); btn.setBackground(TEAL); btn.setForeground(Color.WHITE);
+        btn.addActionListener(e->{
+            if(user.getText().equals("admin") && new String(pass.getPassword()).equals("admin")){
+                cards.show(main, "dashboard"); refreshAll();
+            } else JOptionPane.showMessageDialog(this,"Username: admin, Pass: admin");
+        });
+        box.add(l); box.add(user); box.add(pass); box.add(btn);
+        p.add(box); return p;
+    }
+    JPanel createSidebar(String active){
+        JPanel side = new JPanel(); side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
+        side.setBackground(DARK); side.setPreferredSize(new Dimension(200,0));
+        String[] items = {"Dashboard","File Management","Folder Management","File Operations","File Details","Search","Recycle Bin","Settings / Logout"};
+        String[] keys = {"dashboard","fileman","folderman","ops","details","search","recycle","settings"};
+        JLabel title = new JLabel(" FILE OS v2.0"); title.setForeground(Color.WHITE);
+        title.setFont(new Font("Segoe UI",Font.BOLD,16)); title.setBorder(BorderFactory.createEmptyBorder(15,10,15,10));
+        side.add(title);
+        for(int i=0;i<items.length;i++){
+            JButton b = new JButton(items[i]); b.setAlignmentX(Component.LEFT_ALIGNMENT);
+            b.setMaximumSize(new Dimension(200,40)); b.setBackground(items[i].equals(active)? TEAL : DARK);
+            b.setForeground(Color.WHITE); b.setFocusPainted(false); b.setBorderPainted(false);
+            String k = keys[i]; b.addActionListener(e-> { cards.show(main, k); refreshAll(); });
+            side.add(b);
+        }
+        return side;
+    }
+    JPanel createDashboard(){
+        JPanel root = new JPanel(new BorderLayout()); JPanel center = new JPanel(new GridLayout(2,2,20,20));
+        center.setBorder(BorderFactory.createEmptyBorder(20,20,20,20)); center.setBackground(CARD);
+        center.add(infoCard("Total Disk", "2048 KB")); center.add(infoCard("Used Space", "used"));
+        center.add(infoCard("Total Files", "files")); center.add(infoCard("Folders", "4"));
+        JPanel top = new JPanel(new BorderLayout()); top.add(createSidebar("Dashboard"), BorderLayout.WEST);
+        top.add(center, BorderLayout.CENTER); return top;
+    }
+    JPanel infoCard(String t, String valType){
+        JPanel c = new JPanel(new BorderLayout()); c.setBackground(Color.WHITE);
+        c.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+        JLabel a = new JLabel(t, SwingConstants.CENTER); a.setFont(new Font("Segoe UI",Font.BOLD,14));
+        JLabel b = new JLabel(valType.equals("used")? "0 KB" : valType.equals("files")? "0" : valType, SwingConstants.CENTER);
+        b.setFont(new Font("Segoe UI",Font.BOLD,24)); b.setForeground(TEAL);
+        if(valType.equals("used")) lblUsed=b; if(valType.equals("files")) lblFiles=b;
+        c.add(a, BorderLayout.NORTH); c.add(b, BorderLayout.CENTER); return c;
+    }
+    JPanel createFileManager(){
+        JPanel root = new JPanel(new BorderLayout()); model = new DefaultTableModel(new String[]{"Name","Size","Folder","Attr","Status"},0);
+        JTable table = new JTable(model); JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JTextField tName = new JTextField(10); JTextField tSize = new JTextField(5);
+        cbFolder = new JComboBox<>(folders.toArray(new String[0]));
+        JButton bCreate = new JButton("Create File"); bCreate.setBackground(TEAL); bCreate.setForeground(Color.WHITE);
+        bCreate.addActionListener(e->{
+            String n=tName.getText().trim(); if(n.isEmpty()) return;
+            try{ int s=Integer.parseInt(tSize.getText()); if(files.containsKey(n)||used+s>TOTAL){msg("Exists or Full"); return;}
+                 files.put(n, new MyFile(n,s, cbFolder.getSelectedItem().toString())); used+=s; refreshAll(); tName.setText("");}catch(Exception ex){msg("Size number only");}
+        });
+        top.add(new JLabel("Name:")); top.add(tName); top.add(new JLabel("Size:")); top.add(tSize); top.add(cbFolder); top.add(bCreate);
+        root.add(createSidebar("File Management"), BorderLayout.WEST);
+        JPanel center = new JPanel(new BorderLayout()); center.add(top, BorderLayout.NORTH); center.add(new JScrollPane(table), BorderLayout.CENTER);
+        root.add(center, BorderLayout.CENTER); return root;
+    }
+    JPanel createFolderMan(){
+        JPanel root = new JPanel(new BorderLayout()); DefaultListModel<String> lm = new DefaultListModel<>(); folders.forEach(lm::addElement);
+        JList<String> list = new JList<>(lm); JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JTextField tf = new JTextField(15); JButton add = new JButton("Create Folder"); add.setBackground(TEAL); add.setForeground(Color.WHITE);
+        add.addActionListener(e->{ if(!tf.getText().isEmpty()){folders.add(tf.getText()); lm.addElement(tf.getText()); cbFolder.addItem(tf.getText()); tf.setText("");}});
+        top.add(new JLabel("Folder Name:")); top.add(tf); top.add(add);
+        root.add(createSidebar("Folder Management"), BorderLayout.WEST);
+        JPanel c = new JPanel(new BorderLayout()); c.add(top, BorderLayout.NORTH); c.add(new JScrollPane(list), BorderLayout.CENTER);
+        root.add(c, BorderLayout.CENTER); return root;
+    }
+    JPanel createOperations(){
+        JPanel root = new JPanel(new BorderLayout());
+        JPanel grid = new JPanel(new GridLayout(3,3,15,15)); grid.setBorder(BorderFactory.createEmptyBorder(20,20,20,20)); grid.setBackground(CARD);
+        grid.add(opBtn("OPEN File", e-> openFile())); grid.add(opBtn("CLOSE File", e-> closeFile()));
+        grid.add(opBtn("READ File", e-> readFile())); grid.add(opBtn("WRITE File", e-> writeFile()));
+        grid.add(opBtn("SEEK (Read Part)", e-> seekFile())); grid.add(opBtn("MOVE File", e-> moveFile()));
+        grid.add(opBtn("COPY File", e-> copyFile())); grid.add(opBtn("TRUNCATE File", e-> truncateFile()));
+        grid.add(opBtn("SET ATTRIBUTE", e-> setAttr()));
+        root.add(createSidebar("File Operations"), BorderLayout.WEST); root.add(grid, BorderLayout.CENTER); return root;
+    }
+    JButton opBtn(String t, java.awt.event.ActionListener al){ JButton b=new JButton(t); b.setFont(new Font("Segoe UI",Font.BOLD,13)); b.setBackground(Color.WHITE); b.addActionListener(al); return b; }
+    JPanel createDetails(){
+        JPanel root = new JPanel(new BorderLayout()); JTextArea ta = new JTextArea();
+        JButton b = new JButton("Show Selected File Details"); b.addActionListener(e->{
+            String sel = askFile(); if(sel==null) return;
+            MyFile f=files.get(sel); ta.setText("--- FILE DETAILS ---\nName: "+f.name+"\nSize: "+f.size+" KB\nFolder: "+f.folder+"\nAttribute: "+f.attr+"\nStatus: "+(f.isOpen?"OPEN":"CLOSED")+"\nContent Length: "+f.content.length()+"\nContent:\n"+f.content);
+        });
+        root.add(createSidebar("File Details"), BorderLayout.WEST);
+        JPanel c = new JPanel(new BorderLayout()); c.add(b, BorderLayout.NORTH); c.add(new JScrollPane(ta), BorderLayout.CENTER);
+        root.add(c, BorderLayout.CENTER); return root;
+    }
+    JPanel createSearch(){
+        JPanel root = new JPanel(new BorderLayout()); JTextField s = new JTextField(20); JTextArea r = new JTextArea(); JButton btn = new JButton("Search");
+        btn.addActionListener(e->{ String q=s.getText().toLowerCase(); r.setText(""); files.values().stream().filter(f->f.name.toLowerCase().contains(q)).forEach(f-> r.append(f.name+" | "+f.folder+" | "+f.size+"KB | "+f.attr+"\n")); });
+        JPanel top = new JPanel(); top.add(new JLabel("Search:")); top.add(s); top.add(btn);
+        root.add(createSidebar("Search"), BorderLayout.WEST); JPanel c=new JPanel(new BorderLayout()); c.add(top, BorderLayout.NORTH); c.add(new JScrollPane(r), BorderLayout.CENTER); root.add(c, BorderLayout.CENTER); return root;
+    }
+    JPanel createRecycle(){
+        JPanel root = new JPanel(new BorderLayout()); recycleModel = new DefaultTableModel(new String[]{"Name","Size"},0); JTable t=new JTable(recycleModel);
+        JButton restore = new JButton("Restore"); JButton del = new JButton("Permanent Delete");
+        restore.addActionListener(e->{ int row=t.getSelectedRow(); if(row==-1) return; String n=recycleModel.getValueAt(row,0).toString(); files.put(n, recycle.remove(n)); refreshAll(); });
+        del.addActionListener(e->{ int row=t.getSelectedRow(); if(row!=-1){ recycle.remove(recycleModel.getValueAt(row,0).toString()); refreshAll(); }});
+        JPanel top = new JPanel(); top.add(restore); top.add(del);
+        root.add(createSidebar("Recycle Bin"), BorderLayout.WEST); JPanel c=new JPanel(new BorderLayout()); c.add(top, BorderLayout.NORTH); c.add(new JScrollPane(t), BorderLayout.CENTER); root.add(c, BorderLayout.CENTER); return root;
+    }
+    JPanel createSettings(){
+        JPanel root = new JPanel(new BorderLayout()); JPanel c = new JPanel(new GridBagLayout()); c.setBackground(CARD);
+        JButton logout = new JButton("LOGOUT"); logout.setBackground(Color.RED); logout.setForeground(Color.WHITE); logout.setFont(new Font("Segoe UI",Font.BOLD,18));
+        logout.addActionListener(e-> cards.show(main,"login"));
+        c.add(logout); root.add(createSidebar("Settings / Logout"), BorderLayout.WEST); root.add(c, BorderLayout.CENTER); return root;
+    }
+    String askFile(){ return (String)JOptionPane.showInputDialog(this,"Enter File Name:", "Select File", JOptionPane.PLAIN_MESSAGE, null, files.keySet().toArray(), null); }
+    void msg(String s){ JOptionPane.showMessageDialog(this,s); }
+    void openFile(){ String n=askFile(); if(n==null) return; files.get(n).isOpen=true; msg(n+" is now OPEN"); refreshAll(); }
+    void closeFile(){ String n=askFile(); if(n==null) return; files.get(n).isOpen=false; msg(n+" CLOSED"); refreshAll(); }
+    void readFile(){ String n=askFile(); if(n==null) return; MyFile f=files.get(n); if(!f.isOpen){ msg("First OPEN the file!"); return; } JOptionPane.showMessageDialog(this,"READ: "+f.name+"\n\n"+ (f.content.isEmpty()?"(Empty File)":f.content)); }
+    void writeFile(){ String n=askFile(); if(n==null) return; MyFile f=files.get(n); if(!f.isOpen){ msg("First OPEN the file!"); return; } String data = JOptionPane.showInputDialog(this,"Write Content for "+n, f.content); if(data!=null) f.content=data; }
+    void seekFile(){ String n=askFile(); if(n==null) return; MyFile f=files.get(n); try{ int pos=Integer.parseInt(JOptionPane.showInputDialog(this,"Enter Position to Seek (0 to "+f.content.length()+")")); JOptionPane.showMessageDialog(this,"Content from "+pos+":\n"+f.content.substring(Math.min(pos,f.content.length()))); }catch(Exception ex){msg("Invalid Position");} }
+    void moveFile(){ String n=askFile(); if(n==null) return; String to=(String)JOptionPane.showInputDialog(this,"Move to Folder:", "Move", JOptionPane.PLAIN_MESSAGE, null, folders.toArray(), null); if(to!=null) files.get(n).folder=to; refreshAll(); }
+    void copyFile(){ String n=askFile(); if(n==null) return; MyFile f=files.get(n); if(used+f.size>TOTAL){msg("Disk Full for Copy!"); return;} String copyName=f.name+"_copy"; files.put(copyName, new MyFile(copyName,f.size,f.folder)); files.get(copyName).content=f.content; used+=f.size; refreshAll(); msg("Copied to "+copyName); }
+    void truncateFile(){ String n=askFile(); if(n==null) return; MyFile f=files.get(n); f.content=""; msg(f.name+" Truncated"); }
+    void setAttr(){ String n=askFile(); if(n==null) return; String[] opts={"Normal","Read-Only","Hidden"}; String a=(String)JOptionPane.showInputDialog(this,"Set Attribute:", "Attribute", JOptionPane.PLAIN_MESSAGE, null, opts, opts[0]); if(a!=null) files.get(n).attr=a; refreshAll(); }
+    void refreshAll(){
+        if(model!=null){ model.setRowCount(0); for(MyFile f: files.values()) model.addRow(new Object[]{f.name, f.size+" KB", f.folder, f.attr, f.isOpen?"OPEN":"CLOSED"}); }
+        if(recycleModel!=null){ recycleModel.setRowCount(0); for(MyFile f: recycle.values()) recycleModel.addRow(new Object[]{f.name, f.size+" KB"}); }
+        if(lblFiles!=null) lblFiles.setText(String.valueOf(files.size())); if(lblUsed!=null){ lblUsed.setText(used+" KB"); bar.setValue(used); }
+    }
+    public static void main(String[] args){ new Simulator().setVisible(true); }
+}
